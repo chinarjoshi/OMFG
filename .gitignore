@@ -1,0 +1,26 @@
+# Build artifacts
+build/
+DerivedData/
+
+# Xcode
+*.xcuserstate
+xcuserdata/
+
+# Editor swap files
+*.swp
+*.swo
+*~
+
+# Go auto-generated
+go/auto/
+go/vendor/
+
+# Large binaries - rebuild with 'make framework'
+Syncthing.xcframework/ios-arm64/
+Syncthing.xcframework/ios-arm64_x86_64-simulator/
+
+# External source - clone separately
+syncthing-src/
+
+# macOS
+.DS_Store
