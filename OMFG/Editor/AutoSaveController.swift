@@ -2,20 +2,18 @@ import Foundation
 
 final class AutoSaveController {
     private let debounceInterval: TimeInterval
-    private let fileStore: FileStore
     private var pendingWorkItem: DispatchWorkItem?
     private let queue = DispatchQueue(label: "autosave", qos: .utility)
 
-    init(fileStore: FileStore, debounceInterval: TimeInterval = 0.5) {
-        self.fileStore = fileStore
+    init(debounceInterval: TimeInterval = 0.5) {
         self.debounceInterval = debounceInterval
     }
 
     func scheduleWrite(content: String, to url: URL) {
         pendingWorkItem?.cancel()
 
-        let workItem = DispatchWorkItem { [weak self] in
-            self?.fileStore.write(content: content, to: url)
+        let workItem = DispatchWorkItem {
+            try? content.write(to: url, atomically: true, encoding: .utf8)
         }
 
         pendingWorkItem = workItem

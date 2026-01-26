@@ -10,103 +10,39 @@ struct OrgSyntaxRules {
 
     init() {
         all = [
-            Self.header1Rule,
-            Self.header2Rule,
-            Self.header3Rule,
-            Self.todoRule,
-            Self.doneRule,
-            Self.linkRule,
-            Self.boldRule,
-            Self.italicRule,
-            Self.timestampRule
+            // Headers
+            Self.rule("^\\* .+$", .anchorsMatchLines, color: .white, font: .monospacedSystemFont(ofSize: 24, weight: .bold)),
+            Self.rule("^\\*\\* .+$", .anchorsMatchLines, color: .white, font: .monospacedSystemFont(ofSize: 20, weight: .bold)),
+            Self.rule("^\\*\\*\\* .+$", .anchorsMatchLines, color: .white, font: .monospacedSystemFont(ofSize: 18, weight: .semibold)),
+            // Keywords
+            Self.rule("\\bTODO\\b", color: .systemRed, font: .monospacedSystemFont(ofSize: 16, weight: .bold)),
+            Self.rule("\\bDONE\\b", color: .systemGreen, font: .monospacedSystemFont(ofSize: 16, weight: .bold)),
+            // Links
+            Self.rule("\\[\\[[^\\]]+\\]\\]", color: .systemBlue, underline: true),
+            // Formatting
+            Self.rule("(?<=\\s|^)\\*[^\\*\\n]+\\*(?=\\s|$)", .anchorsMatchLines, font: .monospacedSystemFont(ofSize: 16, weight: .bold)),
+            Self.rule("(?<=\\s|^)/[^/\\n]+/(?=\\s|$)", .anchorsMatchLines, font: .italicSystemFont(ofSize: 16)),
+            // Timestamps
+            Self.rule("<[^>]+>", color: .systemPurple, background: UIColor.systemPurple.withAlphaComponent(0.1)),
         ]
     }
 
-    private static var header1Rule: SyntaxRule {
-        SyntaxRule(
-            pattern: try! NSRegularExpression(pattern: "^\\* .+$", options: .anchorsMatchLines),
-            attributes: [
-                .font: UIFont.monospacedSystemFont(ofSize: 24, weight: .bold),
-                .foregroundColor: UIColor.white
-            ]
-        )
-    }
-
-    private static var header2Rule: SyntaxRule {
-        SyntaxRule(
-            pattern: try! NSRegularExpression(pattern: "^\\*\\* .+$", options: .anchorsMatchLines),
-            attributes: [
-                .font: UIFont.monospacedSystemFont(ofSize: 20, weight: .bold),
-                .foregroundColor: UIColor.white
-            ]
-        )
-    }
-
-    private static var header3Rule: SyntaxRule {
-        SyntaxRule(
-            pattern: try! NSRegularExpression(pattern: "^\\*\\*\\* .+$", options: .anchorsMatchLines),
-            attributes: [
-                .font: UIFont.monospacedSystemFont(ofSize: 18, weight: .semibold),
-                .foregroundColor: UIColor.white
-            ]
-        )
-    }
-
-    private static var todoRule: SyntaxRule {
-        SyntaxRule(
-            pattern: try! NSRegularExpression(pattern: "\\bTODO\\b"),
-            attributes: [
-                .foregroundColor: UIColor.systemRed,
-                .font: UIFont.monospacedSystemFont(ofSize: 16, weight: .bold)
-            ]
-        )
-    }
-
-    private static var doneRule: SyntaxRule {
-        SyntaxRule(
-            pattern: try! NSRegularExpression(pattern: "\\bDONE\\b"),
-            attributes: [
-                .foregroundColor: UIColor.systemGreen,
-                .font: UIFont.monospacedSystemFont(ofSize: 16, weight: .bold)
-            ]
-        )
-    }
-
-    private static var linkRule: SyntaxRule {
-        SyntaxRule(
-            pattern: try! NSRegularExpression(pattern: "\\[\\[[^\\]]+\\]\\]"),
-            attributes: [
-                .foregroundColor: UIColor.systemBlue,
-                .underlineStyle: NSUnderlineStyle.single.rawValue
-            ]
-        )
-    }
-
-    private static var boldRule: SyntaxRule {
-        SyntaxRule(
-            pattern: try! NSRegularExpression(pattern: "(?<=\\s|^)\\*[^\\*\\n]+\\*(?=\\s|$)", options: .anchorsMatchLines),
-            attributes: [
-                .font: UIFont.monospacedSystemFont(ofSize: 16, weight: .bold)
-            ]
-        )
-    }
-
-    private static var italicRule: SyntaxRule {
-        SyntaxRule(
-            pattern: try! NSRegularExpression(pattern: "(?<=\\s|^)/[^/\\n]+/(?=\\s|$)", options: .anchorsMatchLines),
-            attributes: [
-                .font: UIFont.italicSystemFont(ofSize: 16)
-            ]
-        )
-    }
-
-    private static var timestampRule: SyntaxRule {
-        SyntaxRule(
-            pattern: try! NSRegularExpression(pattern: "<[^>]+>"),
-            attributes: [
-                .foregroundColor: UIColor.systemPurple,
-                .backgroundColor: UIColor.systemPurple.withAlphaComponent(0.1)
-            ]
+    private static func rule(
+        _ pattern: String,
+        _ options: NSRegularExpression.Options = [],
+        color: UIColor? = nil,
+        font: UIFont? = nil,
+        underline: Bool = false,
+        background: UIColor? = nil
+    ) -> SyntaxRule {
+        var attrs: [NSAttributedString.Key: Any] = [:]
+        if let color = color { attrs[.foregroundColor] = color }
+        if let font = font { attrs[.font] = font }
+        if underline { attrs[.underlineStyle] = NSUnderlineStyle.single.rawValue }
+        if let background = background { attrs[.backgroundColor] = background }
+        return SyntaxRule(
+            pattern: try! NSRegularExpression(pattern: pattern, options: options),
+            attributes: attrs
         )
     }
 }

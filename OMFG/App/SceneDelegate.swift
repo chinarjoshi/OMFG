@@ -10,28 +10,19 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         willConnectTo session: UISceneSession,
         options connectionOptions: UIScene.ConnectionOptions
     ) {
-        NSLog("SceneDelegate: scene willConnectTo called")
-        guard let windowScene = scene as? UIWindowScene else {
-            NSLog("SceneDelegate: Failed to get windowScene")
-            return
-        }
+        guard let windowScene = scene as? UIWindowScene else { return }
         window = UIWindow(windowScene: windowScene)
-        NSLog("SceneDelegate: isConfigured = \(configStore.isConfigured)")
 
         if configStore.isConfigured {
-            NSLog("SceneDelegate: Showing EditorViewController")
-            window?.rootViewController = Bootstrap.createEditorViewController()
+            window?.rootViewController = createEditorViewController()
         } else {
-            NSLog("SceneDelegate: Showing SettingsViewController")
-            window?.rootViewController = Bootstrap.createSettingsViewController { [weak self] in
+            window?.rootViewController = SettingsViewController { [weak self] in
                 self?.transitionToEditor()
             }
         }
 
         window?.makeKeyAndVisible()
-        NSLog("SceneDelegate: Window made key and visible")
 
-        // Start sync after window is visible, on background thread
         if configStore.isConfigured {
             startSyncAsync()
         }
@@ -59,7 +50,17 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     private func transitionToEditor() {
-        window?.rootViewController = Bootstrap.createEditorViewController()
+        window?.rootViewController = createEditorViewController()
         startSyncAsync()
+    }
+
+    private func createEditorViewController() -> EditorViewController {
+        let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let dailyNoteManager = DailyNoteManager(baseDirectory: documentsURL)
+        return EditorViewController(
+            dailyNoteManager: dailyNoteManager,
+            autoSaveController: AutoSaveController(),
+            fileWatcher: FileWatcher()
+        )
     }
 }

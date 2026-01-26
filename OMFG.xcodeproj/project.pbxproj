@@ -9,9 +9,7 @@
 /* Begin PBXBuildFile section */
 		A1000001 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001; };
 		A1000002 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000002; };
-		A1000003 /* Bootstrap.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000003; };
 		A1000004 /* SyncEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000004; };
-		A1000005 /* SyncConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000005; };
 		A1000006 /* FileWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000006; };
 		A1000007 /* EditorViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000007; };
 		A1000008 /* OrgTextStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000008; };
@@ -20,7 +18,6 @@
 		A100000B /* DailyNoteManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000B; };
 		A100000C /* SettingsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000C; };
 		A100000D /* ConfigStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000D; };
-		A100000E /* FileStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000E; };
 		A100000F /* Syncthing.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = A2000011; };
 		A1000010 /* Syncthing.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = A2000011; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
@@ -28,9 +25,7 @@
 /* Begin PBXFileReference section */
 		A2000001 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		A2000002 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
-		A2000003 /* Bootstrap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Bootstrap.swift; sourceTree = "<group>"; };
 		A2000004 /* SyncEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncEngine.swift; sourceTree = "<group>"; };
-		A2000005 /* SyncConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncConfig.swift; sourceTree = "<group>"; };
 		A2000006 /* FileWatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileWatcher.swift; sourceTree = "<group>"; };
 		A2000007 /* EditorViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorViewController.swift; sourceTree = "<group>"; };
 		A2000008 /* OrgTextStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrgTextStorage.swift; sourceTree = "<group>"; };
@@ -39,7 +34,6 @@
 		A200000B /* DailyNoteManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyNoteManager.swift; sourceTree = "<group>"; };
 		A200000C /* SettingsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsViewController.swift; sourceTree = "<group>"; };
 		A200000D /* ConfigStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigStore.swift; sourceTree = "<group>"; };
-		A200000E /* FileStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileStore.swift; sourceTree = "<group>"; };
 		A200000F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A2000010 /* OMFG.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OMFG.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A2000011 /* Syncthing.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = Syncthing.xcframework; sourceTree = "<group>"; };
@@ -107,7 +101,6 @@
 			children = (
 				A2000001 /* AppDelegate.swift */,
 				A2000002 /* SceneDelegate.swift */,
-				A2000003 /* Bootstrap.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -116,7 +109,6 @@
 			isa = PBXGroup;
 			children = (
 				A2000004 /* SyncEngine.swift */,
-				A2000005 /* SyncConfig.swift */,
 				A2000006 /* FileWatcher.swift */,
 			);
 			path = Sync;
@@ -153,7 +145,6 @@
 			isa = PBXGroup;
 			children = (
 				A200000D /* ConfigStore.swift */,
-				A200000E /* FileStore.swift */,
 			);
 			path = Storage;
 			sourceTree = "<group>";
@@ -226,9 +217,7 @@
 			files = (
 				A1000001 /* AppDelegate.swift in Sources */,
 				A1000002 /* SceneDelegate.swift in Sources */,
-				A1000003 /* Bootstrap.swift in Sources */,
 				A1000004 /* SyncEngine.swift in Sources */,
-				A1000005 /* SyncConfig.swift in Sources */,
 				A1000006 /* FileWatcher.swift in Sources */,
 				A1000007 /* EditorViewController.swift in Sources */,
 				A1000008 /* OrgTextStorage.swift in Sources */,
@@ -237,7 +226,6 @@
 				A100000B /* DailyNoteManager.swift in Sources */,
 				A100000C /* SettingsViewController.swift in Sources */,
 				A100000D /* ConfigStore.swift in Sources */,
-				A100000E /* FileStore.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
