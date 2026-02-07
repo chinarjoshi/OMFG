@@ -37,7 +37,7 @@ final class SettingsViewController: UIViewController {
         stack.addArrangedSubview(spacer(22))
         stack.addArrangedSubview(label("This Device ID:", font: .preferredFont(forTextStyle: .headline)))
         deviceIDLabel.text = "Starting..."
-        deviceIDLabel.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
+        deviceIDLabel.font = .systemFont(ofSize: 11, weight: .regular)
         deviceIDLabel.textColor = .lightGray
         deviceIDLabel.numberOfLines = 0
         stack.addArrangedSubview(deviceIDLabel)

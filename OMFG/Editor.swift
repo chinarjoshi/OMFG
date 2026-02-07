@@ -50,16 +50,16 @@ final class OrgTextStorage: NSTextStorage {
 
         return [
             // Headers
-            rule("^\\* .+$", .anchorsMatchLines, color: .white, font: .monospacedSystemFont(ofSize: 24, weight: .bold)),
-            rule("^\\*\\* .+$", .anchorsMatchLines, color: .white, font: .monospacedSystemFont(ofSize: 20, weight: .bold)),
-            rule("^\\*\\*\\* .+$", .anchorsMatchLines, color: .white, font: .monospacedSystemFont(ofSize: 18, weight: .semibold)),
+            rule("^\\* .+$", .anchorsMatchLines, color: .white, font: .systemFont(ofSize: 24, weight: .bold)),
+            rule("^\\*\\* .+$", .anchorsMatchLines, color: .white, font: .systemFont(ofSize: 20, weight: .bold)),
+            rule("^\\*\\*\\* .+$", .anchorsMatchLines, color: .white, font: .systemFont(ofSize: 18, weight: .semibold)),
             // Keywords
-            rule("\\bTODO\\b", color: .systemRed, font: .monospacedSystemFont(ofSize: 16, weight: .bold)),
-            rule("\\bDONE\\b", color: .systemGreen, font: .monospacedSystemFont(ofSize: 16, weight: .bold)),
+            rule("\\bTODO\\b", color: .systemRed, font: .systemFont(ofSize: 16, weight: .bold)),
+            rule("\\bDONE\\b", color: .systemGreen, font: .systemFont(ofSize: 16, weight: .bold)),
             // Links
             rule("\\[\\[[^\\]]+\\]\\]", color: .systemBlue, underline: true),
             // Formatting
-            rule("(?<=\\s|^)\\*[^\\*\\n]+\\*(?=\\s|$)", .anchorsMatchLines, font: .monospacedSystemFont(ofSize: 16, weight: .bold)),
+            rule("(?<=\\s|^)\\*[^\\*\\n]+\\*(?=\\s|$)", .anchorsMatchLines, font: .systemFont(ofSize: 16, weight: .bold)),
             rule("(?<=\\s|^)/[^/\\n]+/(?=\\s|$)", .anchorsMatchLines, font: .italicSystemFont(ofSize: 16)),
             // Timestamps
             rule("<[^>]+>", color: .systemPurple, background: UIColor.systemPurple.withAlphaComponent(0.1)),
@@ -97,7 +97,7 @@ final class OrgTextStorage: NSTextStorage {
 
     private func applyDefaultAttributes(in range: NSRange) {
         let defaultAttrs: [NSAttributedString.Key: Any] = [
-            .font: UIFont.monospacedSystemFont(ofSize: 16, weight: .regular),
+            .font: UIFont.systemFont(ofSize: 16),
             .foregroundColor: UIColor.white
         ]
         backingStore.setAttributes(defaultAttrs, range: range)
@@ -139,7 +139,7 @@ final class EditorViewController: UIViewController {
     private var lastModificationDate: Date?
 
     // Elastic pull navigation
-    private let overscrollThreshold: CGFloat = 80
+    private let overscrollThreshold: CGFloat = 40
     private var isOverscrolling = false
 
 
@@ -198,8 +198,8 @@ final class EditorViewController: UIViewController {
     }
 
     private func configureTitleLabel() {
-        titleLabel.font = .monospacedSystemFont(ofSize: 18, weight: .medium)
-        titleLabel.textColor = .white
+        titleLabel.font = .systemFont(ofSize: 18, weight: .medium)
+        titleLabel.textColor = .gray
         titleLabel.textAlignment = .left
         view.addSubview(titleLabel)
     }
@@ -265,24 +265,23 @@ final class EditorViewController: UIViewController {
     // MARK: - Swipe Navigation
 
     private func configureSwipeGestures() {
-        // Horizontal swipes for date navigation
         for direction: UISwipeGestureRecognizer.Direction in [.left, .right] {
             let swipe = UISwipeGestureRecognizer(target: self, action: #selector(handleHorizontalSwipe(_:)))
             swipe.direction = direction
             view.addGestureRecognizer(swipe)
+
+            // Make scroll view's pan wait for swipe to fail
+            textView.panGestureRecognizer.require(toFail: swipe)
         }
     }
 
     @objc private func handleHorizontalSwipe(_ gesture: UISwipeGestureRecognizer) {
         var newState = currentState
 
-        switch gesture.direction {
-        case .left:
+        if gesture.direction == .left {
             newState.currentDate = nextDate(from: currentState.currentDate, at: currentState.level)
-        case .right:
+        } else {
             newState.currentDate = previousDate(from: currentState.currentDate, at: currentState.level)
-        default:
-            return
         }
 
         if newState.currentDate != currentState.currentDate {
@@ -539,18 +538,21 @@ extension EditorViewController: UITextViewDelegate {
 
         // Slide current content out
         let exitY: CGFloat = direction == .up ? -view.bounds.height : view.bounds.height
-        UIView.animate(withDuration: 0.08) {
+        UIView.animate(withDuration: 0.05) {
             self.view.transform = CGAffineTransform(translationX: 0, y: exitY)
         } completion: { _ in
             // Load new content
             self.currentState.level = level
             self.loadNote(for: self.currentState)
 
+            // Stop any scroll momentum and reset position
+            self.textView.setContentOffset(.zero, animated: false)
+
             // Position off-screen on opposite side, then animate in
             let enterY: CGFloat = direction == .up ? self.view.bounds.height : -self.view.bounds.height
             self.view.transform = CGAffineTransform(translationX: 0, y: enterY)
 
-            UIView.animate(withDuration: 0.1, delay: 0, options: .curveEaseOut) {
+            UIView.animate(withDuration: 0.06, delay: 0, options: .curveEaseOut) {
                 self.view.transform = .identity
             }
         }
