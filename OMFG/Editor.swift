@@ -1,5 +1,4 @@
 import UIKit
-import CoreLocation
 
 // MARK: - Navigation State
 
@@ -24,7 +23,6 @@ struct NavigationState {
 private struct SyntaxRule {
     let pattern: NSRegularExpression
     let attributes: [NSAttributedString.Key: Any]
-    let isLocationLink: Bool
 }
 
 final class OrgTextStorage: NSTextStorage {
@@ -37,8 +35,7 @@ final class OrgTextStorage: NSTextStorage {
             color: UIColor? = nil,
             font: UIFont? = nil,
             underline: Bool = false,
-            background: UIColor? = nil,
-            isLocationLink: Bool = false
+            background: UIColor? = nil
         ) -> SyntaxRule {
             var attrs: [NSAttributedString.Key: Any] = [:]
             if let color = color { attrs[.foregroundColor] = color }
@@ -47,18 +44,11 @@ final class OrgTextStorage: NSTextStorage {
             if let background = background { attrs[.backgroundColor] = background }
             return SyntaxRule(
                 pattern: try! NSRegularExpression(pattern: pattern, options: options),
-                attributes: attrs,
-                isLocationLink: isLocationLink
+                attributes: attrs
             )
         }
 
         return [
-            // Location bar
-            rule("^:LOCATION:.*$", .anchorsMatchLines,
-                 color: .gray,
-                 font: .systemFont(ofSize: 14),
-                 background: UIColor(white: 0.15, alpha: 1),
-                 isLocationLink: true),
             // Headers
             rule("^\\* .+$", .anchorsMatchLines, color: .white, font: .systemFont(ofSize: 24, weight: .bold)),
             rule("^\\*\\* .+$", .anchorsMatchLines, color: .white, font: .systemFont(ofSize: 20, weight: .bold)),
@@ -87,7 +77,7 @@ final class OrgTextStorage: NSTextStorage {
     override func replaceCharacters(in range: NSRange, with str: String) {
         beginEditing()
         backingStore.replaceCharacters(in: range, with: str)
-        edited(.editedCharacters, range: range, changeInLength: str.count - range.length)
+        edited(.editedCharacters, range: range, changeInLength: (str as NSString).length - range.length)
         endEditing()
     }
 
@@ -119,14 +109,6 @@ final class OrgTextStorage: NSTextStorage {
             rule.pattern.enumerateMatches(in: text, range: range) { match, _, _ in
                 guard let matchRange = match?.range else { return }
                 backingStore.addAttributes(rule.attributes, range: matchRange)
-
-                // Add link for location lines
-                if rule.isLocationLink {
-                    let matchedText = (text as NSString).substring(with: matchRange)
-                    if let url = URL(string: "location://\(matchedText.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? "")") {
-                        backingStore.addAttribute(.link, value: url, range: matchRange)
-                    }
-                }
             }
         }
     }
@@ -228,11 +210,6 @@ final class EditorViewController: UIViewController {
         textView.keyboardDismissMode = .interactive
         textView.alwaysBounceVertical = true
         textView.delegate = self
-        textView.inputAccessoryView = createKeyboardAccessoryView()
-        textView.linkTextAttributes = [
-            .foregroundColor: UIColor.gray,
-            .backgroundColor: UIColor(white: 0.15, alpha: 1)
-        ]
         view.addSubview(textView)
 
         NotificationCenter.default.addObserver(
@@ -247,29 +224,6 @@ final class EditorViewController: UIViewController {
             name: UIResponder.keyboardWillHideNotification,
             object: nil
         )
-    }
-
-    private func createKeyboardAccessoryView() -> UIView {
-        let container = UIView(frame: CGRect(x: 0, y: 0, width: 0, height: 28))
-        container.backgroundColor = .black
-
-        let button = UIButton(type: .system)
-        button.setImage(UIImage(systemName: "keyboard.chevron.compact.down"), for: .normal)
-        button.tintColor = UIColor(white: 0.4, alpha: 1)
-        button.addTarget(self, action: #selector(dismissKeyboard), for: .touchUpInside)
-        button.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(button)
-
-        NSLayoutConstraint.activate([
-            button.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -12),
-            button.centerYAnchor.constraint(equalTo: container.centerYAnchor)
-        ])
-
-        return container
-    }
-
-    @objc private func dismissKeyboard() {
-        textView.resignFirstResponder()
     }
 
     @objc private func keyboardWillShow(_ notification: Notification) {
@@ -481,7 +435,7 @@ final class EditorViewController: UIViewController {
         try? FileManager.default.attributesOfItem(atPath: url.path)[.modificationDate] as? Date
     }
 
-    private func reloadFromDisk() {
+    func reloadFromDisk() {
         guard let path = currentFilePath,
               let content = try? String(contentsOf: path, encoding: .utf8) else { return }
 
@@ -501,34 +455,6 @@ extension EditorViewController: UITextViewDelegate {
             caretRect.size.height += 8
             textView.scrollRectToVisible(caretRect, animated: false)
         }
-    }
-
-    // MARK: - Location Link Handling
-
-    func textView(_ textView: UITextView, shouldInteractWith URL: URL, in characterRange: NSRange, interaction: UITextItemInteraction) -> Bool {
-        guard URL.scheme == "location" else { return true }
-
-        // Parse the location line: :LOCATION: 📍 Address | lat,lng
-        guard let decoded = URL.absoluteString.removingPercentEncoding else { return false }
-
-        // Extract coordinates after the pipe
-        if let pipeIndex = decoded.lastIndex(of: "|") {
-            let coordsString = String(decoded[decoded.index(after: pipeIndex)...]).trimmingCharacters(in: .whitespaces)
-            let coords = coordsString.split(separator: ",")
-            if coords.count == 2,
-               let lat = Double(coords[0]),
-               let lng = Double(coords[1]) {
-                // Extract address between 📍 and |
-                let addressStart = decoded.firstIndex(of: "📍").map { decoded.index(after: $0) } ?? decoded.startIndex
-                let address = String(decoded[addressStart..<pipeIndex]).trimmingCharacters(in: .whitespaces)
-
-                let coordinate = CLLocationCoordinate2D(latitude: lat, longitude: lng)
-                let mapPopup = MapPopupViewController(coordinate: coordinate, address: address)
-                present(mapPopup, animated: true)
-            }
-        }
-
-        return false
     }
 
     // MARK: - Elastic Pull Navigation

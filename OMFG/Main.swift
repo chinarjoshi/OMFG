@@ -1,7 +1,6 @@
 import UIKit
 import Syncthing
 import AppIntents
-import CoreLocation
 
 // MARK: - Config
 
@@ -143,9 +142,6 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         guard let windowScene = scene as? UIWindowScene else { return }
         window = UIWindow(windowScene: windowScene)
 
-        // Request location permission for quick notes
-        LocationManager.shared.requestPermission()
-
         if UserDefaults.standard.isConfigured {
             let editor = createEditorViewController()
             editorViewController = editor
@@ -167,6 +163,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     func sceneDidBecomeActive(_ scene: UIScene) {
         startSyncAsync()
+        editorViewController?.reloadFromDisk()
     }
 
     func sceneWillResignActive(_ scene: UIScene) {
@@ -260,15 +257,6 @@ struct QuickNoteIntent: AppIntent {
         if !content.isEmpty && !content.hasSuffix("\n") {
             content += "\n"
         }
-
-        // Capture location if available (non-blocking, fail silently)
-        if let location = LocationManager.shared.currentLocation {
-            let coords = location.coordinate
-            if let address = try? await LocationManager.shared.reverseGeocode(location) {
-                content += String(format: ":LOCATION: 📍 %@ | %.4f,%.4f\n", address, coords.latitude, coords.longitude)
-            }
-        }
-
         content += note + "\n"
         try? content.write(to: fileURL, atomically: true, encoding: .utf8)
 

@@ -45,7 +45,5 @@
 	</array>
 	<key>UILaunchScreen</key>
 	<dict/>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Attach location to quick notes</string>
 </dict>
 </plist>
