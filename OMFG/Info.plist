@@ -45,5 +45,11 @@
 	</array>
 	<key>UILaunchScreen</key>
 	<dict/>
+	<key>NSCameraUsageDescription</key>
+	<string>Take photos to attach to notes</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Save note photos</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Add location to your notes</string>
 </dict>
 </plist>

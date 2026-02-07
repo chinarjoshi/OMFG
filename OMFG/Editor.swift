@@ -49,6 +49,10 @@ final class OrgTextStorage: NSTextStorage {
         }
 
         return [
+            // Property drawers
+            rule("^:PROPERTIES:$", .anchorsMatchLines, color: .gray, font: .systemFont(ofSize: 12)),
+            rule("^:END:$", .anchorsMatchLines, color: .gray, font: .systemFont(ofSize: 12)),
+            rule("^:(IMAGE|LOCATION):.*$", .anchorsMatchLines, color: .gray, font: .systemFont(ofSize: 12)),
             // Headers
             rule("^\\* .+$", .anchorsMatchLines, color: .white, font: .systemFont(ofSize: 24, weight: .bold)),
             rule("^\\*\\* .+$", .anchorsMatchLines, color: .white, font: .systemFont(ofSize: 20, weight: .bold)),

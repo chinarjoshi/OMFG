@@ -160,6 +160,22 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         if UserDefaults.standard.isConfigured {
             startSyncAsync()
         }
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleQuickCapture),
+            name: .quickCaptureRequested,
+            object: nil
+        )
+    }
+
+    @objc private func handleQuickCapture() {
+        let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let capture = QuickCaptureViewController(baseDirectory: documentsURL) { [weak self] in
+            self?.editorViewController?.reloadFromDisk()
+        }
+        capture.modalPresentationStyle = .fullScreen
+        window?.rootViewController?.present(capture, animated: true)
     }
 
     func sceneDidBecomeActive(_ scene: UIScene) {
@@ -243,31 +259,19 @@ struct OpenDailyNoteIntent: AppIntent {
 @available(iOS 16.0, *)
 struct QuickNoteIntent: AppIntent {
     static var title: LocalizedStringResource = "Quick Note"
-    static var description = IntentDescription("Append a quick note to today's daily note")
-    static var openAppWhenRun: Bool = false
-
-    @Parameter(title: " ")
-    var note: String
+    static var description = IntentDescription("Take a photo and add a quick note")
+    static var openAppWhenRun: Bool = true
 
     func perform() async throws -> some IntentResult {
-        let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-        let dailyFolder = documentsURL.appendingPathComponent("daily", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dailyFolder, withIntermediateDirectories: true)
-
-        let calendar = Calendar.current
-        let components = calendar.dateComponents([.year, .month, .day], from: Date())
-        let filename = String(format: "%04d-%02d-%02d.org", components.year!, components.month!, components.day!)
-        let fileURL = dailyFolder.appendingPathComponent(filename)
-
-        var content = (try? String(contentsOf: fileURL, encoding: .utf8)) ?? ""
-        if !content.isEmpty && !content.hasSuffix("\n") {
-            content += "\n"
+        await MainActor.run {
+            NotificationCenter.default.post(name: .quickCaptureRequested, object: nil)
         }
-        content += note + "\n"
-        try content.write(to: fileURL, atomically: true, encoding: .utf8)
-
         return .result()
     }
+}
+
+extension Notification.Name {
+    static let quickCaptureRequested = Notification.Name("quickCaptureRequested")
 }
 
 @available(iOS 16.0, *)
