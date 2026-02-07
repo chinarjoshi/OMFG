@@ -1,4 +1,5 @@
 import UIKit
+import CoreLocation
 
 // MARK: - Navigation State
 
@@ -23,6 +24,7 @@ struct NavigationState {
 private struct SyntaxRule {
     let pattern: NSRegularExpression
     let attributes: [NSAttributedString.Key: Any]
+    let isLocationLink: Bool
 }
 
 final class OrgTextStorage: NSTextStorage {
@@ -35,7 +37,8 @@ final class OrgTextStorage: NSTextStorage {
             color: UIColor? = nil,
             font: UIFont? = nil,
             underline: Bool = false,
-            background: UIColor? = nil
+            background: UIColor? = nil,
+            isLocationLink: Bool = false
         ) -> SyntaxRule {
             var attrs: [NSAttributedString.Key: Any] = [:]
             if let color = color { attrs[.foregroundColor] = color }
@@ -44,11 +47,18 @@ final class OrgTextStorage: NSTextStorage {
             if let background = background { attrs[.backgroundColor] = background }
             return SyntaxRule(
                 pattern: try! NSRegularExpression(pattern: pattern, options: options),
-                attributes: attrs
+                attributes: attrs,
+                isLocationLink: isLocationLink
             )
         }
 
         return [
+            // Location bar
+            rule("^:LOCATION:.*$", .anchorsMatchLines,
+                 color: .gray,
+                 font: .systemFont(ofSize: 14),
+                 background: UIColor(white: 0.15, alpha: 1),
+                 isLocationLink: true),
             // Headers
             rule("^\\* .+$", .anchorsMatchLines, color: .white, font: .systemFont(ofSize: 24, weight: .bold)),
             rule("^\\*\\* .+$", .anchorsMatchLines, color: .white, font: .systemFont(ofSize: 20, weight: .bold)),
@@ -109,6 +119,14 @@ final class OrgTextStorage: NSTextStorage {
             rule.pattern.enumerateMatches(in: text, range: range) { match, _, _ in
                 guard let matchRange = match?.range else { return }
                 backingStore.addAttributes(rule.attributes, range: matchRange)
+
+                // Add link for location lines
+                if rule.isLocationLink {
+                    let matchedText = (text as NSString).substring(with: matchRange)
+                    if let url = URL(string: "location://\(matchedText.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? "")") {
+                        backingStore.addAttribute(.link, value: url, range: matchRange)
+                    }
+                }
             }
         }
     }
@@ -211,6 +229,10 @@ final class EditorViewController: UIViewController {
         textView.alwaysBounceVertical = true
         textView.delegate = self
         textView.inputAccessoryView = createKeyboardAccessoryView()
+        textView.linkTextAttributes = [
+            .foregroundColor: UIColor.gray,
+            .backgroundColor: UIColor(white: 0.15, alpha: 1)
+        ]
         view.addSubview(textView)
 
         NotificationCenter.default.addObserver(
@@ -479,6 +501,34 @@ extension EditorViewController: UITextViewDelegate {
             caretRect.size.height += 8
             textView.scrollRectToVisible(caretRect, animated: false)
         }
+    }
+
+    // MARK: - Location Link Handling
+
+    func textView(_ textView: UITextView, shouldInteractWith URL: URL, in characterRange: NSRange, interaction: UITextItemInteraction) -> Bool {
+        guard URL.scheme == "location" else { return true }
+
+        // Parse the location line: :LOCATION: 📍 Address | lat,lng
+        guard let decoded = URL.absoluteString.removingPercentEncoding else { return false }
+
+        // Extract coordinates after the pipe
+        if let pipeIndex = decoded.lastIndex(of: "|") {
+            let coordsString = String(decoded[decoded.index(after: pipeIndex)...]).trimmingCharacters(in: .whitespaces)
+            let coords = coordsString.split(separator: ",")
+            if coords.count == 2,
+               let lat = Double(coords[0]),
+               let lng = Double(coords[1]) {
+                // Extract address between 📍 and |
+                let addressStart = decoded.firstIndex(of: "📍").map { decoded.index(after: $0) } ?? decoded.startIndex
+                let address = String(decoded[addressStart..<pipeIndex]).trimmingCharacters(in: .whitespaces)
+
+                let coordinate = CLLocationCoordinate2D(latitude: lat, longitude: lng)
+                let mapPopup = MapPopupViewController(coordinate: coordinate, address: address)
+                present(mapPopup, animated: true)
+            }
+        }
+
+        return false
     }
 
     // MARK: - Elastic Pull Navigation
