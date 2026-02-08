@@ -67,6 +67,10 @@ final class OrgTextStorage: NSTextStorage {
             rule("(?<=\\s|^)/[^/\\n]+/(?=\\s|$)", .anchorsMatchLines, font: .italicSystemFont(ofSize: 16)),
             // Timestamps
             rule("<[^>]+>", color: .systemPurple, background: UIColor.systemPurple.withAlphaComponent(0.1)),
+            // Table lines - gray monospace so columns align
+            rule("^\\|.+\\|$", .anchorsMatchLines, color: .gray, font: .monospacedSystemFont(ofSize: 16, weight: .regular)),
+            // Horizontal rule (3+ dashes on their own line)
+            rule("^-{3,}$", .anchorsMatchLines, color: .gray),
         ]
     }()
 
@@ -145,6 +149,9 @@ final class EditorViewController: UIViewController {
     // Elastic pull navigation
     private let overscrollThreshold: CGFloat = 40
     private var isOverscrolling = false
+
+    // Table auto-formatting
+    private var previousTableRange: NSRange?
 
 
     var onRequestSettings: (() -> Void)?
@@ -456,9 +463,132 @@ final class EditorViewController: UIViewController {
         let clampedLength = min(currentSelection.length, maxLocation - clampedLocation)
         textView.selectedRange = NSRange(location: clampedLocation, length: clampedLength)
     }
+
+    // MARK: - Table Auto-Formatting
+
+    private func isTableLine(_ line: String) -> Bool {
+        line.hasPrefix("|") && line.hasSuffix("|")
+    }
+
+    private func tableRange(at position: Int) -> NSRange? {
+        let text = textStorage.string as NSString
+        guard position <= text.length else { return nil }
+
+        let lineRange = text.lineRange(for: NSRange(location: position, length: 0))
+        let line = text.substring(with: lineRange)
+
+        guard isTableLine(line.trimmingCharacters(in: .newlines)) else { return nil }
+
+        // Expand upward to find table start
+        var startLine = lineRange.location
+        while startLine > 0 {
+            let prevLineRange = text.lineRange(for: NSRange(location: startLine - 1, length: 0))
+            let prevLine = text.substring(with: prevLineRange).trimmingCharacters(in: .newlines)
+            if !isTableLine(prevLine) { break }
+            startLine = prevLineRange.location
+        }
+
+        // Expand downward to find table end
+        var endLine = NSMaxRange(lineRange)
+        while endLine < text.length {
+            let nextLineRange = text.lineRange(for: NSRange(location: endLine, length: 0))
+            let nextLine = text.substring(with: nextLineRange).trimmingCharacters(in: .newlines)
+            if !isTableLine(nextLine) { break }
+            endLine = NSMaxRange(nextLineRange)
+        }
+
+        return NSRange(location: startLine, length: endLine - startLine)
+    }
+
+    private func formatTable(in range: NSRange) {
+        let text = textStorage.string as NSString
+        let tableText = text.substring(with: range)
+        let lines = tableText.components(separatedBy: "\n").filter { !$0.isEmpty }
+
+        guard !lines.isEmpty else { return }
+
+        // Parse cells for each row
+        var rows: [[String]] = []
+        var columnCount = 0
+
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard trimmed.hasPrefix("|") && trimmed.hasSuffix("|") else { continue }
+
+            // Remove leading/trailing pipes and split
+            let inner = String(trimmed.dropFirst().dropLast())
+            let cells = inner.components(separatedBy: "|").map { $0.trimmingCharacters(in: .whitespaces) }
+            rows.append(cells)
+            columnCount = max(columnCount, cells.count)
+        }
+
+        guard columnCount > 0 else { return }
+
+        // Calculate max width for each column
+        var columnWidths = Array(repeating: 0, count: columnCount)
+        for row in rows {
+            for (i, cell) in row.enumerated() where i < columnCount {
+                // Skip separator rows (all dashes) for width calculation
+                if !cell.allSatisfy({ $0 == "-" || $0 == "+" }) {
+                    columnWidths[i] = max(columnWidths[i], cell.count)
+                }
+            }
+        }
+
+        // Ensure minimum width of 1
+        columnWidths = columnWidths.map { max($0, 1) }
+
+        // Rebuild table with aligned columns
+        var formattedLines: [String] = []
+        for row in rows {
+            var formattedCells: [String] = []
+            for (i, cell) in row.enumerated() where i < columnCount {
+                let width = columnWidths[i]
+                // Check if separator row
+                if cell.allSatisfy({ $0 == "-" || $0 == "+" }) {
+                    formattedCells.append(String(repeating: "-", count: width))
+                } else {
+                    formattedCells.append(cell.padding(toLength: width, withPad: " ", startingAt: 0))
+                }
+            }
+            // Pad missing columns
+            while formattedCells.count < columnCount {
+                formattedCells.append(String(repeating: " ", count: columnWidths[formattedCells.count]))
+            }
+            formattedLines.append("| " + formattedCells.joined(separator: " | ") + " |")
+        }
+
+        let formatted = formattedLines.joined(separator: "\n")
+        let currentText = text.substring(with: range).trimmingCharacters(in: .newlines)
+
+        // Only update if changed
+        if formatted != currentText {
+            let selectedRange = textView.selectedRange
+            textStorage.replaceCharacters(in: range, with: formatted + "\n")
+
+            // Restore cursor position if possible
+            if selectedRange.location >= NSMaxRange(range) {
+                let delta = (formatted.count + 1) - range.length
+                textView.selectedRange = NSRange(location: selectedRange.location + delta, length: 0)
+            }
+        }
+    }
 }
 
 extension EditorViewController: UITextViewDelegate {
+    func textViewDidChangeSelection(_ textView: UITextView) {
+        let cursorPosition = textView.selectedRange.location
+        let currentTableRange = tableRange(at: cursorPosition)
+
+        // If we were in a table and now we're not (or in a different table), format the previous table
+        if let prevRange = previousTableRange,
+           currentTableRange?.location != prevRange.location {
+            formatTable(in: prevRange)
+        }
+
+        previousTableRange = currentTableRange
+    }
+
     func textViewDidChange(_ textView: UITextView) {
         guard let path = currentFilePath else { return }
         scheduleAutoSave(content: textStorage.string, to: path)
