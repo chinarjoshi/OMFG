@@ -154,9 +154,10 @@ final class EditorViewController: UIViewController {
     private var watchedFileDescriptor: Int32 = -1
     private var fileWatchSource: DispatchSourceFileSystemObject?
     private var lastModificationDate: Date?
+    private var isReloadingFromDisk = false
 
     // Elastic pull navigation
-    private let overscrollThreshold: CGFloat = 40
+    private let overscrollThreshold: CGFloat = 25
     private var isOverscrolling = false
 
     // Table auto-formatting
@@ -456,6 +457,9 @@ final class EditorViewController: UIViewController {
         guard currentDate != lastModificationDate else { return }
         lastModificationDate = currentDate
         reloadFromDisk()
+
+        // Re-establish watcher — atomic writes (rename) invalidate the file descriptor
+        watchFile(url)
     }
 
     private func modificationDate(for url: URL) -> Date? {
@@ -466,6 +470,7 @@ final class EditorViewController: UIViewController {
         guard let path = currentFilePath,
               let content = try? String(contentsOf: path, encoding: .utf8) else { return }
 
+        isReloadingFromDisk = true
         let currentSelection = textView.selectedRange
         textStorage.replaceCharacters(in: NSRange(location: 0, length: textStorage.length), with: content)
 
@@ -474,6 +479,7 @@ final class EditorViewController: UIViewController {
         let clampedLocation = min(currentSelection.location, maxLocation)
         let clampedLength = min(currentSelection.length, maxLocation - clampedLocation)
         textView.selectedRange = NSRange(location: clampedLocation, length: clampedLength)
+        isReloadingFromDisk = false
     }
 
     // MARK: - Table Auto-Formatting
@@ -558,7 +564,7 @@ extension EditorViewController: UITextViewDelegate {
     }
 
     func textViewDidChange(_ textView: UITextView) {
-        guard let path = currentFilePath else { return }
+        guard let path = currentFilePath, !isReloadingFromDisk else { return }
         scheduleAutoSave(content: textStorage.string, to: path)
 
         // Workout transformation on double newline

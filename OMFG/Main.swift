@@ -127,8 +127,9 @@ final class SyncEngine {
             DispatchQueue.main.async { self.onLogUpdate?() }
             return
         }
+        let timestamp = DateFormatter.localizedString(from: Date(), dateStyle: .none, timeStyle: .medium)
         for line in events.components(separatedBy: "\n") where !line.isEmpty {
-            logs.append(line)
+            logs.append("[\(timestamp)] \(line)")
             if logs.count > 100 { logs.removeFirst() }
         }
         DispatchQueue.main.async { self.onLogUpdate?() }
@@ -146,10 +147,10 @@ final class SyncEngine {
     func applyConfig() {
         let defaults = UserDefaults.standard
         guard let folderID = defaults.folderID else {
+            log("No folder ID configured")
             return
         }
 
-        // Always use current Documents path — iOS container UUIDs change between installs
         let folderPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!.path
 
         var folderErr: NSError?
@@ -170,6 +171,10 @@ final class SyncEngine {
             if let err = shareErr {
                 log("ShareFolder error: \(err.localizedDescription)")
             }
+
+            log("Config: folder=\(folderID) remote=\(String(remoteID.prefix(7)))")
+        } else {
+            log("Config: folder=\(folderID) (no remote)")
         }
     }
 }
@@ -305,18 +310,46 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         }
         settings.enableSwipeBack = true
         settingsViewController = settings
-        window?.rootViewController = settings
+
+        guard let window = window else { return }
+        let snapshot = editorViewController?.view.snapshotView(afterScreenUpdates: false)
+        window.rootViewController = settings
+        if let snapshot = snapshot {
+            snapshot.frame = window.bounds
+            window.addSubview(snapshot)
+            settings.view.transform = CGAffineTransform(translationX: 0, y: -window.bounds.height)
+
+            UIView.animate(withDuration: 0.06, delay: 0, options: .curveEaseOut) {
+                snapshot.transform = CGAffineTransform(translationX: 0, y: window.bounds.height)
+                settings.view.transform = .identity
+            } completion: { _ in
+                snapshot.removeFromSuperview()
+            }
+        }
     }
 
     private func transitionBackToEditor() {
-        guard let editor = editorViewController else {
+        guard let editor = editorViewController, let window = window else {
             transitionToEditor()
             return
         }
 
+        let snapshot = settingsViewController?.view.snapshotView(afterScreenUpdates: false)
         settingsViewController = nil
         editor.returnFromSettings()
-        window?.rootViewController = editor
+        window.rootViewController = editor
+        if let snapshot = snapshot {
+            snapshot.frame = window.bounds
+            window.addSubview(snapshot)
+            editor.view.transform = CGAffineTransform(translationX: 0, y: window.bounds.height)
+
+            UIView.animate(withDuration: 0.06, delay: 0, options: .curveEaseOut) {
+                snapshot.transform = CGAffineTransform(translationX: 0, y: -window.bounds.height)
+                editor.view.transform = .identity
+            } completion: { _ in
+                snapshot.removeFromSuperview()
+            }
+        }
     }
 
     private func createEditorViewController() -> EditorViewController {

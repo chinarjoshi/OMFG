@@ -74,7 +74,7 @@ final class SettingsViewController: UIViewController {
         saveButton.addTarget(self, action: #selector(saveAndContinue), for: .touchUpInside)
         stack.addArrangedSubview(saveButton)
 
-        stack.addArrangedSubview(spacer(32))
+        stack.addArrangedSubview(spacer(16))
         stack.addArrangedSubview(label("Sync Log:", font: .preferredFont(forTextStyle: .headline)))
 
         logTextView.isEditable = false
@@ -82,8 +82,10 @@ final class SettingsViewController: UIViewController {
         logTextView.textColor = .lightGray
         logTextView.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
         logTextView.layer.cornerRadius = 8
-        logTextView.heightAnchor.constraint(equalToConstant: 150).isActive = true
         stack.addArrangedSubview(logTextView)
+
+        // Pin log bottom to safe area so it fills remaining space
+        logTextView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -20).isActive = true
 
         syncEngine.onLogUpdate = { [weak self] in
             self?.updateLogView()
@@ -125,7 +127,6 @@ final class SettingsViewController: UIViewController {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
 
-        // Load saved values
         let defaults = UserDefaults.standard
         if let folderID = defaults.folderID {
             folderIDField.text = folderID
@@ -134,19 +135,19 @@ final class SettingsViewController: UIViewController {
             remoteDeviceField.text = remoteDeviceID
         }
 
-        // Set up device ID callback - will update when available
+        // Show device ID immediately if available
+        let id = syncEngine.deviceID
+        if !id.isEmpty && id != "0000000-0000000-0000000-0000000-0000000-0000000-0000000-0000000" {
+            fullDeviceID = id
+            deviceIDLabel.text = id
+        }
+
         syncEngine.onDeviceIDUpdate = { [weak self] id in
             self?.fullDeviceID = id
             self?.deviceIDLabel.text = id
         }
 
-        // Start polling immediately
         syncEngine.startEventPolling()
-
-        // Start sync in background
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            self?.syncEngine.start()
-        }
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -172,7 +173,6 @@ final class SettingsViewController: UIViewController {
         guard let folderID = folderIDField.text, !folderID.isEmpty else { return }
         let defaults = UserDefaults.standard
         defaults.folderID = folderID
-        defaults.folderPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!.path
         defaults.remoteDeviceID = remoteDeviceField.text?.isEmpty == true ? nil : remoteDeviceField.text
         defaults.isConfigured = true
         onComplete?()

@@ -184,9 +184,11 @@ func SetFolder(folderID, folderPath string) error {
 	defer mu.Unlock()
 
 	if cfg == nil {
+		addEvent("SetFolder: no config")
 		return nil
 	}
 
+	addEvent(fmt.Sprintf("SetFolder: %s -> %s", folderID, folderPath))
 	_, err := cfg.Modify(func(c *config.Configuration) {
 		for i := range c.Folders {
 			if c.Folders[i].ID == folderID {
@@ -199,7 +201,7 @@ func SetFolder(folderID, folderPath string) error {
 			Path:             folderPath,
 			Type:             config.FolderTypeSendReceive,
 			FilesystemType:   fs.FilesystemTypeBasic,
-			RescanIntervalS:  60,
+			RescanIntervalS:  10,
 			FSWatcherEnabled: true,
 		})
 	})
@@ -280,13 +282,19 @@ func listenEvents() {
 	for {
 		ev, err := sub.Poll(time.Minute)
 		if err != nil {
-			continue // timeout — no events, just re-poll
+			continue
 		}
 
 		var msg string
 		switch ev.Type {
+		case events.StartupComplete:
+			msg = "Ready"
 		case events.DeviceConnected:
-			msg = "Device connected"
+			if data, ok := ev.Data.(map[string]interface{}); ok {
+				if id, ok := data["id"].(string); ok && len(id) > 7 {
+					msg = fmt.Sprintf("Connected to %s", id[:7])
+				}
+			}
 		case events.DeviceDisconnected:
 			msg = "Device disconnected"
 		case events.StateChanged:
@@ -297,11 +305,18 @@ func listenEvents() {
 				} else if to == "syncing" {
 					msg = "Syncing..."
 				}
-				// Skip routine idle->scanning->idle transitions
+			}
+		case events.LocalChangeDetected:
+			if data, ok := ev.Data.(map[string]interface{}); ok {
+				msg = fmt.Sprintf("Local: %v %v", data["path"], data["action"])
 			}
 		case events.ItemFinished:
 			if data, ok := ev.Data.(map[string]interface{}); ok {
 				msg = fmt.Sprintf("Synced %v", data["item"])
+			}
+		case events.FolderCompletion:
+			if data, ok := ev.Data.(map[string]interface{}); ok {
+				msg = fmt.Sprintf("%v: %.0f%%", data["folder"], data["completion"])
 			}
 		case events.FolderErrors:
 			if data, ok := ev.Data.(map[string]interface{}); ok {
@@ -311,6 +326,10 @@ func listenEvents() {
 					}
 				}
 			}
+		case events.ConfigSaved, events.LocalIndexUpdated:
+			// skip noisy events
+		default:
+			msg = ev.Type.String()
 		}
 
 		if msg != "" {
@@ -323,9 +342,7 @@ func addEvent(msg string) {
 	eventMu.Lock()
 	defer eventMu.Unlock()
 
-	timestamp := time.Now().Format("15:04:05")
-	entry := fmt.Sprintf("[%s] %s", timestamp, msg)
-	eventLog = append(eventLog, entry)
+	eventLog = append(eventLog, msg)
 	if len(eventLog) > 50 {
 		eventLog = eventLog[1:]
 	}
