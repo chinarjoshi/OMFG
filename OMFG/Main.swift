@@ -145,9 +145,12 @@ final class SyncEngine {
 
     func applyConfig() {
         let defaults = UserDefaults.standard
-        guard let folderID = defaults.folderID, let folderPath = defaults.folderPath else {
+        guard let folderID = defaults.folderID else {
             return
         }
+
+        // Always use current Documents path — iOS container UUIDs change between installs
+        let folderPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!.path
 
         var folderErr: NSError?
         LibsyncthingSetFolder(folderID, folderPath, &folderErr)

@@ -291,18 +291,26 @@ func listenEvents() {
 			msg = "Device disconnected"
 		case events.StateChanged:
 			if data, ok := ev.Data.(map[string]interface{}); ok {
-				msg = fmt.Sprintf("Folder %v: %v -> %v", data["folder"], data["from"], data["to"])
-			}
-		case events.FolderCompletion:
-			if data, ok := ev.Data.(map[string]interface{}); ok {
-				msg = fmt.Sprintf("Folder %v: %.1f%% complete", data["folder"], data["completion"])
+				to := data["to"]
+				if to == "error" {
+					msg = fmt.Sprintf("Folder error: %v", data["error"])
+				} else if to == "syncing" {
+					msg = "Syncing..."
+				}
+				// Skip routine idle->scanning->idle transitions
 			}
 		case events.ItemFinished:
 			if data, ok := ev.Data.(map[string]interface{}); ok {
-				msg = fmt.Sprintf("File %v: %v", data["item"], data["action"])
+				msg = fmt.Sprintf("Synced %v", data["item"])
 			}
 		case events.FolderErrors:
-			msg = "Folder errors occurred"
+			if data, ok := ev.Data.(map[string]interface{}); ok {
+				if errs, ok := data["errors"].([]interface{}); ok && len(errs) > 0 {
+					if first, ok := errs[0].(map[string]interface{}); ok {
+						msg = fmt.Sprintf("Error: %v (%v)", first["error"], first["path"])
+					}
+				}
+			}
 		}
 
 		if msg != "" {
