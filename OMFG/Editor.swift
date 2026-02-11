@@ -424,8 +424,11 @@ final class EditorViewController: UIViewController {
 
     // MARK: - Sync
 
-    /// Unified sync: reconciles editor content with file on disk.
-    /// Called on keypress (debounced), every 2 seconds, and on navigation.
+    /// Reconciles editor content with file on disk.
+    /// Called on keypress (debounced 300ms), every 2s, and on navigation.
+    ///
+    /// Model: save local edits to disk, reload remote changes from disk,
+    /// then absorb any Syncthing conflict files via two-way LCS merge.
     func sync() {
         guard !isSyncing, let path = currentFilePath else { return }
         isSyncing = true
@@ -434,77 +437,99 @@ final class EditorViewController: UIViewController {
         let editorContent = textStorage.fileContent
         let diskContent = (try? String(contentsOf: path, encoding: .utf8)) ?? ""
 
-        let localChanged = editorContent != lastSyncedContent
-        let remoteChanged = diskContent != lastSyncedContent
-
-        if localChanged && remoteChanged {
-            guard editorContent != diskContent else {
+        if editorContent != diskContent {
+            if editorContent != lastSyncedContent {
+                // Local edits — save to disk
                 lastSyncedContent = editorContent
-                return
+                try? editorContent.write(to: path, atomically: true, encoding: .utf8)
+            } else {
+                // Remote changed — reload into editor
+                lastSyncedContent = diskContent
+                reloadEditor(with: diskContent)
             }
-            let merged = Self.merge(base: lastSyncedContent, local: editorContent, remote: diskContent)
-            lastSyncedContent = merged
-            try? merged.write(to: path, atomically: true, encoding: .utf8)
-            if merged != editorContent {
-                let sel = textView.selectedRange
-                textStorage.replaceCharacters(in: NSRange(location: 0, length: textStorage.length), with: merged)
-                let max = textStorage.length
-                textView.selectedRange = NSRange(
-                    location: min(sel.location, max),
-                    length: min(sel.length, max - min(sel.location, max))
-                )
-            }
-        } else if localChanged {
-            guard editorContent != diskContent else {
-                lastSyncedContent = editorContent
-                return
-            }
+        } else {
             lastSyncedContent = editorContent
-            try? editorContent.write(to: path, atomically: true, encoding: .utf8)
-        } else if remoteChanged {
-            lastSyncedContent = diskContent
-            let sel = textView.selectedRange
-            textStorage.replaceCharacters(in: NSRange(location: 0, length: textStorage.length), with: diskContent)
-            let max = textStorage.length
-            textView.selectedRange = NSRange(
-                location: min(sel.location, max),
-                length: min(sel.length, max - min(sel.location, max))
-            )
         }
+
+        // Absorb any Syncthing conflict files
+        let dir = path.deletingLastPathComponent()
+        let baseName = path.deletingPathExtension().lastPathComponent
+        let ext = path.pathExtension
+
+        guard let files = try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil) else { return }
+
+        let conflictPattern = try! NSRegularExpression(pattern: "\\.sync-conflict-\\d{8}-\\d{6}-[A-Z0-9]{7}(?=\\.)")
+        let conflictFiles = files.filter { url in
+            let name = url.lastPathComponent
+            guard name.hasPrefix(baseName), name.hasSuffix(".\(ext)") else { return false }
+            return conflictPattern.firstMatch(in: name, range: NSRange(name.startIndex..., in: name)) != nil
+        }
+
+        guard !conflictFiles.isEmpty else { return }
+
+        var current = (try? String(contentsOf: path, encoding: .utf8)) ?? ""
+        for conflictFile in conflictFiles {
+            guard let conflictContent = try? String(contentsOf: conflictFile, encoding: .utf8) else { continue }
+            current = Self.mergeTwo(current, conflictContent)
+            try? FileManager.default.removeItem(at: conflictFile)
+        }
+
+        lastSyncedContent = current
+        try? current.write(to: path, atomically: true, encoding: .utf8)
+        reloadEditor(with: current)
     }
 
-    static func merge(base: String, local: String, remote: String) -> String {
-        let baseLines = base.components(separatedBy: "\n")
-        let localLines = local.components(separatedBy: "\n")
-        let remoteLines = remote.components(separatedBy: "\n")
+    private func reloadEditor(with content: String) {
+        let sel = textView.selectedRange
+        textStorage.replaceCharacters(in: NSRange(location: 0, length: textStorage.length), with: content)
+        let max = textStorage.length
+        textView.selectedRange = NSRange(
+            location: min(sel.location, max),
+            length: min(sel.length, max - min(sel.location, max))
+        )
+    }
 
-        var prefixLen = 0
-        let minPrefix = min(baseLines.count, min(localLines.count, remoteLines.count))
-        while prefixLen < minPrefix
-            && baseLines[prefixLen] == localLines[prefixLen]
-            && baseLines[prefixLen] == remoteLines[prefixLen] {
-            prefixLen += 1
+    static func mergeTwo(_ a: String, _ b: String) -> String {
+        let aLines = a.components(separatedBy: "\n")
+        let bLines = b.components(separatedBy: "\n")
+        let matches = lcs(aLines, bLines)
+
+        var result: [String] = []
+        var ai = 0, bi = 0
+        for (mi, ni) in matches {
+            result += aLines[ai..<mi]
+            result += bLines[bi..<ni]
+            result.append(aLines[mi])
+            ai = mi + 1
+            bi = ni + 1
         }
+        result += aLines[ai...]
+        result += bLines[bi...]
+        return result.joined(separator: "\n")
+    }
 
-        var suffixLen = 0
-        let maxSuffix = min(baseLines.count - prefixLen,
-                            min(localLines.count - prefixLen, remoteLines.count - prefixLen))
-        while suffixLen < maxSuffix
-            && baseLines[baseLines.count - 1 - suffixLen] == localLines[localLines.count - 1 - suffixLen]
-            && baseLines[baseLines.count - 1 - suffixLen] == remoteLines[remoteLines.count - 1 - suffixLen] {
-            suffixLen += 1
+    private static func lcs(_ a: [String], _ b: [String]) -> [(Int, Int)] {
+        let m = a.count, n = b.count
+        guard m > 0 && n > 0 else { return [] }
+        var dp = Array(repeating: Array(repeating: 0, count: n + 1), count: m + 1)
+        for i in 1...m {
+            for j in 1...n {
+                dp[i][j] = a[i-1] == b[j-1] ? dp[i-1][j-1] + 1 : max(dp[i-1][j], dp[i][j-1])
+            }
         }
-
-        let prefix = Array(baseLines.prefix(prefixLen))
-        let suffix = suffixLen > 0 ? Array(baseLines.suffix(suffixLen)) : []
-        let remoteMiddle = Array(remoteLines[prefixLen ..< (remoteLines.count - suffixLen)])
-        let localMiddle = Array(localLines[prefixLen ..< (localLines.count - suffixLen)])
-
-        var merged = prefix
-        merged += remoteMiddle
-        merged += localMiddle
-        merged += suffix
-        return merged.joined(separator: "\n")
+        var result: [(Int, Int)] = []
+        var i = m, j = n
+        while i > 0 && j > 0 {
+            if a[i-1] == b[j-1] {
+                result.append((i-1, j-1))
+                i -= 1; j -= 1
+            } else if dp[i-1][j] >= dp[i][j-1] {
+                i -= 1
+            } else {
+                j -= 1
+            }
+        }
+        return result.reversed()
     }
 
     /// Schedule a sync after a short debounce (called on keypress).
