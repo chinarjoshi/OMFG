@@ -160,9 +160,19 @@ final class SettingsViewController: UIViewController {
     @objc private func copyDeviceID(_ sender: UIButton) {
         UIPasteboard.general.string = fullDeviceID
         let original = sender.titleLabel?.text
-        sender.setTitle("Copied", for: .normal)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+        let originalColor = sender.titleColor(for: .normal)
+        sender.setTitle("Copied!", for: .normal)
+        sender.setTitleColor(.systemGreen, for: .normal)
+        UIView.animate(withDuration: 0.1, animations: {
+            sender.transform = CGAffineTransform(scaleX: 1.2, y: 1.2)
+        }) { _ in
+            UIView.animate(withDuration: 0.1) {
+                sender.transform = .identity
+            }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
             sender.setTitle(original, for: .normal)
+            sender.setTitleColor(originalColor, for: .normal)
         }
     }
 
