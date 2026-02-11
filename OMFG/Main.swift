@@ -256,7 +256,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     @objc private func handleQuickCapture() {
         let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
         let capture = QuickCaptureViewController(baseDirectory: documentsURL) { [weak self] in
-            self?.editorViewController?.reloadFromDisk()
+            self?.editorViewController?.sync()
         }
         capture.modalPresentationStyle = .fullScreen
         window?.rootViewController?.present(capture, animated: true)
@@ -266,7 +266,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         backgroundSyncEndWorkItem?.cancel()
         backgroundSyncEndWorkItem = nil
         startSyncAsync()
-        editorViewController?.reloadFromDisk()
+        editorViewController?.sync()
     }
 
     func sceneWillResignActive(_ scene: UIScene) {

@@ -167,10 +167,11 @@ final class EditorViewController: UIViewController {
     private var currentState: NavigationState
     private var currentFilePath: URL?
 
-    // Auto-save
-    private var pendingSaveWorkItem: DispatchWorkItem?
-    private let saveQueue = DispatchQueue(label: "autosave", qos: .utility)
-    private var lastSavedContent: String = ""
+    // Sync: unified save/reload
+    private var lastSyncedContent: String = ""
+    private var syncWorkItem: DispatchWorkItem?
+    private var syncTimer: Timer?
+    private var isSyncing = false
 
     // Elastic pull navigation
     private let overscrollThreshold: CGFloat = 25
@@ -178,9 +179,6 @@ final class EditorViewController: UIViewController {
 
     // Table auto-formatting
     private var previousTableRange: NSRange?
-
-    // Periodic disk check for external changes (Syncthing)
-    private var diskCheckTimer: Timer?
 
     // Workout transformation
     private lazy var workoutTransformer = WorkoutTransformer(textStorage: textStorage)
@@ -210,7 +208,7 @@ final class EditorViewController: UIViewController {
     }
 
     deinit {
-        diskCheckTimer?.invalidate()
+        syncTimer?.invalidate()
         NotificationCenter.default.removeObserver(self)
     }
 
@@ -221,11 +219,8 @@ final class EditorViewController: UIViewController {
         configureTextView()
         configureSwipeGestures()
         loadNote(for: currentState)
-        diskCheckTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
-            guard let self = self,
-                  self.pendingSaveWorkItem == nil,
-                  self.textStorage.fileContent == self.lastSavedContent else { return }
-            self.reloadFromDisk()
+        syncTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
+            self?.sync()
         }
     }
 
@@ -387,7 +382,7 @@ final class EditorViewController: UIViewController {
     // MARK: - Note Loading
 
     private func loadNote(for state: NavigationState) {
-        saveCurrentNoteIfNeeded()
+        sync()
         currentState = state
 
         guard state.level != .settings else {
@@ -405,20 +400,13 @@ final class EditorViewController: UIViewController {
         } else {
             content = ""
         }
-        pendingSaveWorkItem?.cancel()
-        pendingSaveWorkItem = nil
-        lastSavedContent = content
+        syncWorkItem?.cancel()
+        syncWorkItem = nil
+        isSyncing = true
+        lastSyncedContent = content
         textStorage.replaceCharacters(in: NSRange(location: 0, length: textStorage.length), with: content)
+        isSyncing = false
         textView.contentOffset = .zero
-    }
-
-    private func saveCurrentNoteIfNeeded() {
-        guard let path = currentFilePath else { return }
-        flushSaveImmediately()
-        let content = textStorage.fileContent
-        guard content != lastSavedContent else { return }
-        lastSavedContent = content
-        try? content.write(to: path, atomically: true, encoding: .utf8)
     }
 
     func returnFromSettings() {
@@ -428,45 +416,49 @@ final class EditorViewController: UIViewController {
         loadNote(for: currentState)
     }
 
-    // MARK: - Auto Save
+    // MARK: - Sync
 
-    private func scheduleAutoSave(content: String, to url: URL) {
-        guard content != lastSavedContent else { return }
-        pendingSaveWorkItem?.cancel()
-        let workItem = DispatchWorkItem { [weak self] in
-            // Skip if disk already has this content (prevents mtime bump → Syncthing conflict)
-            if let diskContent = try? String(contentsOf: url, encoding: .utf8),
-               diskContent == content {
-                self?.lastSavedContent = content
+    /// Unified sync: reconciles editor content with file on disk.
+    /// Called on keypress (debounced), every 2 seconds, and on navigation.
+    func sync() {
+        guard !isSyncing, let path = currentFilePath else { return }
+        isSyncing = true
+        defer { isSyncing = false }
+
+        let editorContent = textStorage.fileContent
+        let diskContent = (try? String(contentsOf: path, encoding: .utf8)) ?? ""
+
+        let localChanged = editorContent != lastSyncedContent
+        let remoteChanged = diskContent != lastSyncedContent
+
+        if localChanged {
+            // Local edits exist — save them (local wins if both changed;
+            // Syncthing creates conflict file for remote version)
+            guard editorContent != diskContent else {
+                lastSyncedContent = editorContent
                 return
             }
-            self?.lastSavedContent = content
-            try? content.write(to: url, atomically: true, encoding: .utf8)
+            lastSyncedContent = editorContent
+            try? editorContent.write(to: path, atomically: true, encoding: .utf8)
+        } else if remoteChanged {
+            // Only remote changed — reload
+            lastSyncedContent = diskContent
+            let sel = textView.selectedRange
+            textStorage.replaceCharacters(in: NSRange(location: 0, length: textStorage.length), with: diskContent)
+            let max = textStorage.length
+            textView.selectedRange = NSRange(
+                location: min(sel.location, max),
+                length: min(sel.length, max - min(sel.location, max))
+            )
         }
-        pendingSaveWorkItem = workItem
-        saveQueue.asyncAfter(deadline: .now() + 0.5, execute: workItem)
     }
 
-    private func flushSaveImmediately() {
-        pendingSaveWorkItem?.perform()
-        pendingSaveWorkItem = nil
-    }
-
-    func reloadFromDisk() {
-        guard let path = currentFilePath,
-              let content = try? String(contentsOf: path, encoding: .utf8),
-              content != lastSavedContent else { return }
-
-        pendingSaveWorkItem?.cancel()
-        pendingSaveWorkItem = nil
-        lastSavedContent = content
-        let currentSelection = textView.selectedRange
-        textStorage.replaceCharacters(in: NSRange(location: 0, length: textStorage.length), with: content)
-
-        let maxLocation = textStorage.length
-        let clampedLocation = min(currentSelection.location, maxLocation)
-        let clampedLength = min(currentSelection.length, maxLocation - clampedLocation)
-        textView.selectedRange = NSRange(location: clampedLocation, length: clampedLength)
+    /// Schedule a sync after a short debounce (called on keypress).
+    private func scheduleSyncSoon() {
+        syncWorkItem?.cancel()
+        let item = DispatchWorkItem { [weak self] in self?.sync() }
+        syncWorkItem = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: item)
     }
 
     // MARK: - Table Auto-Formatting
@@ -557,9 +549,7 @@ extension EditorViewController: UITextViewDelegate {
             if let attachment = attrs[.attachment] as? WorkoutTableAttachment {
                 textStorage.replaceCharacters(in: range, with: attachment.rawText)
                 textView.selectedRange = NSRange(location: range.location + (attachment.rawText as NSString).length, length: 0)
-                if let path = currentFilePath {
-                    scheduleAutoSave(content: textStorage.fileContent, to: path)
-                }
+                scheduleSyncSoon()
                 return false
             }
         }
@@ -567,12 +557,10 @@ extension EditorViewController: UITextViewDelegate {
     }
 
     func textViewDidChange(_ textView: UITextView) {
-        guard let path = currentFilePath else { return }
+        guard !isSyncing else { return }
 
-        // Workout transformation on double newline
         workoutTransformer.textChanged()
-
-        scheduleAutoSave(content: textStorage.fileContent, to: path)
+        scheduleSyncSoon()
 
         if let selectedRange = textView.selectedTextRange {
             var caretRect = textView.caretRect(for: selectedRange.end)
@@ -630,7 +618,7 @@ extension EditorViewController: UITextViewDelegate {
 
         // Handle settings specially
         if level == .settings {
-            saveCurrentNoteIfNeeded()
+            sync()
             currentState.level = level
             onRequestSettings?()
             return
