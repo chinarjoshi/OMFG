@@ -356,15 +356,21 @@ final class EditorViewController: UIViewController {
         }
     }
 
+    private static let shortMonthFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "MMM"
+        return f
+    }()
+
     private func displayTitle(for state: NavigationState) -> String {
-        let c = calendar.dateComponents([.year, .month, .day, .weekOfYear], from: state.currentDate)
+        let c = calendar.dateComponents([.day, .weekOfYear], from: state.currentDate)
         switch state.level {
         case .daily:
-            return String(format: "%04d-%02d-%02d", c.year!, c.month!, c.day!)
+            return "\(c.day!)"
         case .weekly:
-            return String(format: "%04d-W%02d", c.year!, c.weekOfYear!)
+            return "W\(c.weekOfYear!)"
         case .monthly:
-            return String(format: "%04d-%02d", c.year!, c.month!)
+            return Self.shortMonthFormatter.string(from: state.currentDate)
         case .settings:
             return "Settings"
         }
