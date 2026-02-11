@@ -179,6 +179,9 @@ final class EditorViewController: UIViewController {
     // Table auto-formatting
     private var previousTableRange: NSRange?
 
+    // Periodic disk check for external changes (Syncthing)
+    private var diskCheckTimer: Timer?
+
     // Workout transformation
     private lazy var workoutTransformer = WorkoutTransformer(textStorage: textStorage)
 
@@ -207,6 +210,7 @@ final class EditorViewController: UIViewController {
     }
 
     deinit {
+        diskCheckTimer?.invalidate()
         NotificationCenter.default.removeObserver(self)
     }
 
@@ -217,6 +221,12 @@ final class EditorViewController: UIViewController {
         configureTextView()
         configureSwipeGestures()
         loadNote(for: currentState)
+        diskCheckTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
+            guard let self = self,
+                  self.pendingSaveWorkItem == nil,
+                  self.textStorage.fileContent == self.lastSavedContent else { return }
+            self.reloadFromDisk()
+        }
     }
 
     override func viewDidLayoutSubviews() {
@@ -406,6 +416,7 @@ final class EditorViewController: UIViewController {
         guard let path = currentFilePath else { return }
         flushSaveImmediately()
         let content = textStorage.fileContent
+        guard content != lastSavedContent else { return }
         lastSavedContent = content
         try? content.write(to: path, atomically: true, encoding: .utf8)
     }
@@ -423,6 +434,12 @@ final class EditorViewController: UIViewController {
         guard content != lastSavedContent else { return }
         pendingSaveWorkItem?.cancel()
         let workItem = DispatchWorkItem { [weak self] in
+            // Skip if disk already has this content (prevents mtime bump → Syncthing conflict)
+            if let diskContent = try? String(contentsOf: url, encoding: .utf8),
+               diskContent == content {
+                self?.lastSavedContent = content
+                return
+            }
             self?.lastSavedContent = content
             try? content.write(to: url, atomically: true, encoding: .utf8)
         }
