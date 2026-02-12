@@ -268,7 +268,7 @@ final class QuickCaptureViewController: UIViewController, CLLocationManagerDeleg
         let noteText = textField.text ?? ""
 
         var properties = ":PROPERTIES:\n"
-        properties += ":IMAGE: attachments/\(filename)\n"
+        properties += ":IMAGE: \(filename)\n"
 
         if let coords = coordinates {
             let locationString: String
@@ -295,27 +295,33 @@ final class QuickCaptureViewController: UIViewController, CLLocationManagerDeleg
 
     // MARK: - File Operations
 
+    private func dailyNoteDirectory() -> URL {
+        let calendar = Calendar.current
+        let c = calendar.dateComponents([.year, .month, .day], from: Date())
+        let subfolder = String(format: "%04d-%02d-%02d", c.year!, c.month!, c.day!)
+        return baseDirectory
+            .appendingPathComponent("daily", isDirectory: true)
+            .appendingPathComponent(subfolder, isDirectory: true)
+    }
+
     private func saveImage(_ data: Data) -> String {
-        let attachmentsDir = baseDirectory.appendingPathComponent("attachments", isDirectory: true)
-        try? FileManager.default.createDirectory(at: attachmentsDir, withIntermediateDirectories: true)
+        let noteDir = dailyNoteDirectory()
+        try? FileManager.default.createDirectory(at: noteDir, withIntermediateDirectories: true)
 
         let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd-HHmmss"
+        formatter.dateFormat = "HHmmss"
         let filename = "\(formatter.string(from: Date())).jpg"
-        let fileURL = attachmentsDir.appendingPathComponent(filename)
+        let fileURL = noteDir.appendingPathComponent(filename)
 
         try? data.write(to: fileURL)
         return filename
     }
 
     private func appendToDaily(note: String) {
-        let dailyFolder = baseDirectory.appendingPathComponent("daily", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dailyFolder, withIntermediateDirectories: true)
+        let noteDir = dailyNoteDirectory()
+        try? FileManager.default.createDirectory(at: noteDir, withIntermediateDirectories: true)
 
-        let calendar = Calendar.current
-        let components = calendar.dateComponents([.year, .month, .day], from: Date())
-        let filename = String(format: "%04d-%02d-%02d.org", components.year!, components.month!, components.day!)
-        let fileURL = dailyFolder.appendingPathComponent(filename)
+        let fileURL = noteDir.appendingPathComponent("note.org")
 
         var content = (try? String(contentsOf: fileURL, encoding: .utf8)) ?? ""
         if !content.isEmpty && !content.hasSuffix("\n") {
@@ -346,8 +352,15 @@ final class QuickCaptureViewController: UIViewController, CLLocationManagerDeleg
         guard let place = placemark else { return nil }
 
         var parts: [String] = []
-        if let locality = place.locality {
-            parts.append(locality)
+        if let street = place.thoroughfare {
+            if let number = place.subThoroughfare {
+                parts.append("\(number) \(street)")
+            } else {
+                parts.append(street)
+            }
+        }
+        if let city = place.locality {
+            parts.append(city)
         }
         if let state = place.administrativeArea {
             parts.append(state)

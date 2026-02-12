@@ -12,6 +12,7 @@
 		A1000022 /* Settings.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000022; };
 		A1000024 /* QuickCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000024; };
 		A1000025 /* WorkoutTransformer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000025; };
+		A1000026 /* PhotoGallery.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000026; };
 		C1000001 /* WorkoutLiner in Frameworks */ = {isa = PBXBuildFile; productRef = C2000001; };
 		A100000F /* Syncthing.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = A2000011; };
 		A1000010 /* Syncthing.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = A2000011; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -62,6 +63,7 @@
 		A2000022 /* Settings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Settings.swift; sourceTree = "<group>"; };
 		A2000024 /* QuickCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickCapture.swift; sourceTree = "<group>"; };
 		A2000025 /* WorkoutTransformer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutTransformer.swift; sourceTree = "<group>"; };
+		A2000026 /* PhotoGallery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoGallery.swift; sourceTree = "<group>"; };
 		A2000023 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A200000F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A2000010 /* OMFG.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OMFG.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -117,6 +119,7 @@
 				A2000022 /* Settings.swift */,
 				A2000024 /* QuickCapture.swift */,
 				A2000025 /* WorkoutTransformer.swift */,
+				A2000026 /* PhotoGallery.swift */,
 				A2000023 /* Assets.xcassets */,
 				A200000F /* Info.plist */,
 			);
@@ -253,6 +256,7 @@
 				A1000022 /* Settings.swift in Sources */,
 				A1000024 /* QuickCapture.swift in Sources */,
 				A1000025 /* WorkoutTransformer.swift in Sources */,
+				A1000026 /* PhotoGallery.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

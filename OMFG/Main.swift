@@ -386,13 +386,15 @@ struct QuickNoteIntent: AppIntent {
 
     func perform() async throws -> some IntentResult {
         let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-        let dailyFolder = documentsURL.appendingPathComponent("daily", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dailyFolder, withIntermediateDirectories: true)
-
         let calendar = Calendar.current
-        let components = calendar.dateComponents([.year, .month, .day], from: Date())
-        let filename = String(format: "%04d-%02d-%02d.org", components.year!, components.month!, components.day!)
-        let fileURL = dailyFolder.appendingPathComponent(filename)
+        let c = calendar.dateComponents([.year, .month, .day], from: Date())
+        let subfolder = String(format: "%04d-%02d-%02d", c.year!, c.month!, c.day!)
+        let noteDir = documentsURL
+            .appendingPathComponent("daily", isDirectory: true)
+            .appendingPathComponent(subfolder, isDirectory: true)
+        try? FileManager.default.createDirectory(at: noteDir, withIntermediateDirectories: true)
+
+        let fileURL = noteDir.appendingPathComponent("note.org")
 
         var content = (try? String(contentsOf: fileURL, encoding: .utf8)) ?? ""
         if !content.isEmpty && !content.hasSuffix("\n") {

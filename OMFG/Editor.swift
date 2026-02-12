@@ -160,6 +160,7 @@ final class EditorViewController: UIViewController {
     private let textContainer: NSTextContainer
     private let textView: UITextView
     private let titleLabel: UILabel
+    private let galleryView = PhotoGalleryView()
 
     private let baseDirectory: URL
     private let calendar = Calendar.current
@@ -216,6 +217,7 @@ final class EditorViewController: UIViewController {
         super.viewDidLoad()
         view.backgroundColor = .black
         configureTitleLabel()
+        configureGalleryView()
         configureTextView()
         configureSwipeGestures()
         loadNote(for: currentState)
@@ -223,6 +225,9 @@ final class EditorViewController: UIViewController {
             self?.sync()
         }
     }
+
+    private let galleryHeight: CGFloat = 200
+    private let galleryPadding: CGFloat = 8
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
@@ -234,6 +239,7 @@ final class EditorViewController: UIViewController {
             width: view.bounds.width - 32,
             height: titleHeight
         )
+
         textView.frame = CGRect(
             x: 0,
             y: safeArea.top + titleHeight,
@@ -244,6 +250,9 @@ final class EditorViewController: UIViewController {
             width: view.bounds.width - textView.textContainerInset.left - textView.textContainerInset.right,
             height: .greatestFiniteMagnitude
         )
+
+        updateGalleryInset()
+        layoutGalleryInScrollView()
     }
 
     private func configureTitleLabel() {
@@ -251,6 +260,50 @@ final class EditorViewController: UIViewController {
         titleLabel.textColor = .gray
         titleLabel.textAlignment = .left
         view.addSubview(titleLabel)
+    }
+
+    private func configureGalleryView() {
+        galleryView.isHidden = true
+        galleryView.layer.cornerRadius = 12
+        galleryView.clipsToBounds = true
+        galleryView.onPhotoTapped = { [weak self] index, entries, sourceFrame in
+            guard let self = self, let window = self.view.window else { return }
+            let viewer = PhotoViewerOverlay()
+            viewer.show(entries: entries, startIndex: index, sourceFrame: sourceFrame, in: window)
+        }
+        textView.addSubview(galleryView)
+    }
+
+    private func updateGalleryInset() {
+        let inset: CGFloat = galleryView.isHidden ? 0 : galleryHeight + galleryPadding * 2
+        textView.contentInset.top = inset
+        textView.verticalScrollIndicatorInsets.top = inset
+    }
+
+    private func layoutGalleryInScrollView() {
+        guard !galleryView.isHidden else { return }
+        let totalInset = galleryHeight + galleryPadding * 2
+        galleryView.frame = CGRect(
+            x: galleryPadding,
+            y: -totalInset + galleryPadding,
+            width: textView.bounds.width - galleryPadding * 2,
+            height: galleryHeight
+        )
+    }
+
+    private func refreshGallery() {
+        guard let path = currentFilePath else {
+            galleryView.isHidden = true
+            updateGalleryInset()
+            return
+        }
+        let noteDir = path.deletingLastPathComponent()
+        let text = textStorage.string
+        let entries = PhotoParser.parse(from: text, noteDirectory: noteDir)
+        galleryView.isHidden = entries.isEmpty
+        galleryView.update(with: entries)
+        updateGalleryInset()
+        layoutGalleryInScrollView()
     }
 
     private func configureTextView() {
@@ -319,23 +372,26 @@ final class EditorViewController: UIViewController {
 
     private func path(for state: NavigationState) -> URL? {
         let c = calendar.dateComponents([.year, .month, .day, .weekOfYear], from: state.currentDate)
-        let filename: String
         let folder: String
+        let subfolder: String
 
         switch state.level {
         case .daily:
-            filename = String(format: "%04d-%02d-%02d.org", c.year!, c.month!, c.day!)
             folder = "daily"
+            subfolder = String(format: "%04d-%02d-%02d", c.year!, c.month!, c.day!)
         case .weekly:
-            filename = String(format: "%04d-W%02d.org", c.year!, c.weekOfYear!)
             folder = "weekly"
+            subfolder = String(format: "%04d-W%02d", c.year!, c.weekOfYear!)
         case .monthly:
-            filename = String(format: "%04d-%02d.org", c.year!, c.month!)
             folder = "monthly"
+            subfolder = String(format: "%04d-%02d", c.year!, c.month!)
         case .settings:
             return nil
         }
-        return baseDirectory.appendingPathComponent(folder, isDirectory: true).appendingPathComponent(filename)
+        return baseDirectory
+            .appendingPathComponent(folder, isDirectory: true)
+            .appendingPathComponent(subfolder, isDirectory: true)
+            .appendingPathComponent("note.org")
     }
 
     private func previousDate(from date: Date, at level: NoteLevel) -> Date {
@@ -412,7 +468,8 @@ final class EditorViewController: UIViewController {
         lastSyncedContent = content
         textStorage.replaceCharacters(in: NSRange(location: 0, length: textStorage.length), with: content)
         isSyncing = false
-        textView.contentOffset = .zero
+        refreshGallery()
+        textView.contentOffset = CGPoint(x: 0, y: -textView.contentInset.top)
     }
 
     func returnFromSettings() {
@@ -446,6 +503,7 @@ final class EditorViewController: UIViewController {
                 // Remote changed — reload into editor
                 lastSyncedContent = diskContent
                 reloadEditor(with: diskContent)
+                refreshGallery()
             }
         } else {
             lastSyncedContent = editorContent
@@ -477,6 +535,7 @@ final class EditorViewController: UIViewController {
         lastSyncedContent = current
         try? current.write(to: path, atomically: true, encoding: .utf8)
         reloadEditor(with: current)
+        refreshGallery()
     }
 
     private func reloadEditor(with content: String) {
