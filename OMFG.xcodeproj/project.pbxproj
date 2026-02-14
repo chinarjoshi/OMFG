@@ -542,16 +542,21 @@
 		};
 /* End XCConfigurationList section */
 
-/* Begin XCLocalSwiftPackageReference section */
-		C3000001 /* XCLocalSwiftPackageReference "Snap" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = Snap;
+/* Begin XCRemoteSwiftPackageReference section */
+		C3000001 /* XCRemoteSwiftPackageReference "snap" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/chinarjoshi/snap";
+			requirement = {
+				branch = treesitter;
+				kind = branch;
+			};
 		};
-/* End XCLocalSwiftPackageReference section */
+/* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
 		C2000001 /* Snap */ = {
 			isa = XCSwiftPackageProductDependency;
+			package = C3000001 /* XCRemoteSwiftPackageReference "snap" */;
 			productName = Snap;
 		};
 /* End XCSwiftPackageProductDependency section */

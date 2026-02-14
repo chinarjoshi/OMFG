@@ -27,3 +27,5 @@ syncthing-src/
 
 CLAUDE.md
 .worktrees
+docs/
+.claude

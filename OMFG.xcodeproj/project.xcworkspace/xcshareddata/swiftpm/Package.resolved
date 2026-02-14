@@ -1,0 +1,15 @@
+{
+  "originHash" : "e8117ff5760a86199f30d3689b91e024b0f064e97aba8157e1005c13219b1405",
+  "pins" : [
+    {
+      "identity" : "snap",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/chinarjoshi/snap",
+      "state" : {
+        "branch" : "treesitter",
+        "revision" : "4466b541883b40acca78107853920697c7c13446"
+      }
+    }
+  ],
+  "version" : 3
+}
