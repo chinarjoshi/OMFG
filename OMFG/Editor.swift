@@ -3,7 +3,7 @@ import UIKit
 // MARK: - Navigation State
 
 enum NoteLevel: Int {
-    case daily, weekly, monthly, settings
+    case search, daily, weekly, monthly, settings
 
     var next: NoteLevel? { NoteLevel(rawValue: rawValue + 1) }
     var previous: NoteLevel? { NoteLevel(rawValue: rawValue - 1) }
@@ -100,13 +100,13 @@ final class OrgTextStorage: NSTextStorage {
         endEditing()
     }
 
-    /// Returns string content with attachment characters replaced by their raw text.
+    /// Returns string content with attachment characters replaced by their raw text wrapped in :SNAP:/:END:.
     var fileContent: String {
         var result = ""
         let text = string as NSString
         enumerateAttribute(.attachment, in: NSRange(location: 0, length: length), options: []) { value, range, _ in
             if let attachment = value as? WorkoutTableAttachment {
-                result += attachment.rawText
+                result += ":SNAP:\n\(attachment.rawText)\n:END:"
             } else {
                 result += text.substring(with: range)
             }
@@ -189,11 +189,16 @@ final class EditorViewController: UIViewController {
     private var previousTableRange: NSRange?
 
     // Workout transformation
-    private lazy var workoutTransformer = WorkoutTransformer(textStorage: textStorage)
+    private lazy var workoutTransformer = WorkoutTransformer(
+        textStorage: textStorage,
+        baseDirectory: baseDirectory,
+        filePath: { [weak self] in self?.currentFilePath }
+    )
     private var enterOnEmptyLine = false
 
-
     var onRequestSettings: (() -> Void)?
+    var onRequestSearch: (() -> Void)?
+    var savedCursorRange: NSRange?
 
     init(baseDirectory: URL, initialState: NavigationState = .today()) {
         self.baseDirectory = baseDirectory
@@ -210,6 +215,7 @@ final class EditorViewController: UIViewController {
         self.titleLabel = UILabel()
 
         super.init(nibName: nil, bundle: nil)
+        WorkoutIndexManager.shared.configure(baseDirectory: baseDirectory)
     }
 
     required init?(coder: NSCoder) {
@@ -307,6 +313,15 @@ final class EditorViewController: UIViewController {
             // Make scroll view's pan wait for swipe to fail
             textView.panGestureRecognizer.require(toFail: swipe)
         }
+
+        let swipeUp = UISwipeGestureRecognizer(target: self, action: #selector(handleSwipeUp))
+        swipeUp.direction = .up
+        view.addGestureRecognizer(swipeUp)
+    }
+
+    @objc private func handleSwipeUp() {
+        guard currentState.level == .daily else { return }
+        navigateToPreviousLevel()
     }
 
     @objc private func handleHorizontalSwipe(_ gesture: UISwipeGestureRecognizer) {
@@ -341,7 +356,7 @@ final class EditorViewController: UIViewController {
         case .monthly:
             filename = String(format: "%04d-%02d.org", c.year!, c.month!)
             folder = "monthly"
-        case .settings:
+        case .settings, .search:
             return nil
         }
         return baseDirectory.appendingPathComponent(folder, isDirectory: true).appendingPathComponent(filename)
@@ -352,7 +367,7 @@ final class EditorViewController: UIViewController {
         case .daily: return calendar.date(byAdding: .day, value: -1, to: date) ?? date
         case .weekly: return calendar.date(byAdding: .weekOfYear, value: -1, to: date) ?? date
         case .monthly: return calendar.date(byAdding: .month, value: -1, to: date) ?? date
-        case .settings: return date
+        case .settings, .search: return date
         }
     }
 
@@ -361,7 +376,7 @@ final class EditorViewController: UIViewController {
         case .daily: return calendar.date(byAdding: .day, value: 1, to: date) ?? date
         case .weekly: return calendar.date(byAdding: .weekOfYear, value: 1, to: date) ?? date
         case .monthly: return calendar.date(byAdding: .month, value: 1, to: date) ?? date
-        case .settings: return date
+        case .settings, .search: return date
         }
     }
 
@@ -382,6 +397,8 @@ final class EditorViewController: UIViewController {
             return Self.shortMonthFormatter.string(from: state.currentDate)
         case .settings:
             return "Settings"
+        case .search:
+            return "Search"
         }
     }
 
@@ -404,6 +421,10 @@ final class EditorViewController: UIViewController {
             onRequestSettings?()
             return
         }
+        guard state.level != .search else {
+            onRequestSearch?()
+            return
+        }
 
         currentFilePath = path(for: state)
         ensureNoteExists(for: state)
@@ -421,6 +442,7 @@ final class EditorViewController: UIViewController {
         lastSyncedContent = content
         textStorage.replaceCharacters(in: NSRange(location: 0, length: textStorage.length), with: content)
         isSyncing = false
+        workoutTransformer.renderAll()
         textView.contentOffset = .zero
     }
 
@@ -429,6 +451,66 @@ final class EditorViewController: UIViewController {
             currentState.level = .monthly
         }
         loadNote(for: currentState)
+    }
+
+    func returnFromSearch() {
+        if currentState.level == .search {
+            currentState.level = .daily
+        }
+        loadNote(for: currentState)
+    }
+
+    func insertAtSavedCursor(_ text: String) {
+        if currentState.level != .daily {
+            currentState.level = .daily
+            currentState.currentDate = Date()
+            loadNote(for: currentState)
+        }
+
+        let insertLocation: Int
+        if let saved = savedCursorRange, saved.location <= textStorage.length {
+            insertLocation = saved.location
+        } else {
+            insertLocation = textStorage.length
+        }
+
+        let insertText = text.hasSuffix("\n") ? text : text + "\n"
+        textStorage.replaceCharacters(
+            in: NSRange(location: insertLocation, length: 0),
+            with: insertText
+        )
+        textView.selectedRange = NSRange(
+            location: insertLocation + (insertText as NSString).length,
+            length: 0
+        )
+        savedCursorRange = nil
+        scheduleSyncSoon()
+    }
+
+    func loadNoteAndScroll(to state: NavigationState, lineNumber: Int?) {
+        loadNote(for: state)
+        guard let line = lineNumber else { return }
+        let text = textStorage.string as NSString
+        var currentLine = 0
+        var charIndex = 0
+        while currentLine < line && charIndex < text.length {
+            let lineRange = text.lineRange(for: NSRange(location: charIndex, length: 0))
+            charIndex = NSMaxRange(lineRange)
+            currentLine += 1
+        }
+        if charIndex <= text.length {
+            textView.selectedRange = NSRange(location: charIndex, length: 0)
+            DispatchQueue.main.async {
+                let rect = self.layoutManager.boundingRect(
+                    forGlyphRange: self.layoutManager.glyphRange(
+                        forCharacterRange: NSRange(location: charIndex, length: 0),
+                        actualCharacterRange: nil
+                    ),
+                    in: self.textContainer
+                )
+                self.textView.scrollRectToVisible(rect, animated: false)
+            }
+        }
     }
 
     // MARK: - Sync
@@ -735,6 +817,15 @@ extension EditorViewController: UITextViewDelegate {
             sync()
             currentState.level = level
             onRequestSettings?()
+            return
+        }
+
+        // Handle search specially
+        if level == .search {
+            sync()
+            savedCursorRange = textView.selectedRange
+            currentState.level = level
+            onRequestSearch?()
             return
         }
 
