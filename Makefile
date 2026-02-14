@@ -16,8 +16,8 @@ $(GOMOBILE):
 framework: $(GOMOBILE)
 	cd go && $(GOMOBILE) bind -target ios,iossimulator -o ../$(FRAMEWORK) ./libsyncthing
 
-build: framework
-	xcodebuild -project omfg.xcodeproj -scheme $(SCHEME) -destination 'id=$(DEVICE)' -configuration Debug build
+build:
+	xcodebuild -project OMFG.xcodeproj -scheme $(SCHEME) -destination 'id=$(DEVICE)' -allowProvisioningUpdates -quiet
 
 deploy: build
 	xcrun devicectl device install app --device $(DEVICE) $(APP)
