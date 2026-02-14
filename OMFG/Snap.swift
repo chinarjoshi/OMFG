@@ -110,20 +110,17 @@ final class WorkoutTableAttachment: NSTextAttachment {
 
         var dataRows: [[String]] = []
         for exercise in result.exercises {
-            let weights = Set(exercise.sets.map(\.weight))
-            let constantWeight = weights.count == 1 ? weights.first! : nil
-
-            let label = constantWeight != nil && constantWeight! > 0
-                ? "\(exercise.name) @\(constantWeight!)"
-                : exercise.name
-
-            var row = [label]
+            var row = [exercise.name]
+            var prevWeight: Int? = nil
             for s in exercise.sets {
-                if constantWeight != nil {
+                if s.weight > 0 && s.weight == prevWeight {
                     row.append("\(s.reps)")
+                } else if s.weight > 0 {
+                    row.append("\(s.reps)x\(s.weight)")
                 } else {
-                    row.append(s.weight > 0 ? "\(s.reps)@\(s.weight)" : "\(s.reps)")
+                    row.append("\(s.reps)")
                 }
+                prevWeight = s.weight
             }
             while row.count < colCount { row.append("") }
             dataRows.append(row)
@@ -139,6 +136,11 @@ final class WorkoutTableAttachment: NSTextAttachment {
                 let w = (cell as NSString).size(withAttributes: attrs).width
                 colWidths[i] = max(colWidths[i], i == 0 ? min(w, maxNameWidth) : w)
             }
+        }
+        // Uniform set column widths
+        if colCount > 1 {
+            let maxSetWidth = colWidths[1...].max() ?? 0
+            for i in 1..<colCount { colWidths[i] = maxSetWidth }
         }
 
         // Per-row heights (name column may wrap)
