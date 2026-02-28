@@ -5,9 +5,12 @@ import Snap
 
 struct WorkoutIndexEntry: Codable {
     let name: String
+    let summary: String?
     let rawLine: String
     let date: String
     let filePath: String
+
+    var displayText: String { summary ?? name }
 }
 
 final class WorkoutIndexManager {
@@ -29,7 +32,12 @@ final class WorkoutIndexManager {
             let key = exercise.name.lowercased()
             // Find the raw line for this exercise
             let rawLine = lines.first { $0.lowercased().contains(exercise.name.lowercased()) } ?? exercise.name
-            let entry = WorkoutIndexEntry(name: exercise.name, rawLine: rawLine, date: date, filePath: relativePath)
+            // Build summary with sets/weights
+            let setParts = exercise.sets.map { s in
+                s.weight > 0 ? "\(s.reps)x\(s.weight)" : "\(s.reps)"
+            }
+            let summary = setParts.isEmpty ? exercise.name : "\(exercise.name) — \(setParts.joined(separator: " "))"
+            let entry = WorkoutIndexEntry(name: exercise.name, summary: summary, rawLine: rawLine, date: date, filePath: relativePath)
 
             var list = entries[key] ?? []
             list.removeAll { $0.date == date && $0.filePath == relativePath }
@@ -272,6 +280,15 @@ final class WorkoutTransformer {
 
             let attachment = WorkoutTableAttachment(rawText: paragraph, parseResult: result)
             textStorage.replaceCharacters(in: fullRange, with: NSAttributedString(attachment: attachment))
+
+            if let fp = filePath() {
+                WorkoutIndexManager.shared.update(
+                    parseResult: result,
+                    rawText: paragraph,
+                    filePath: fp,
+                    baseDirectory: baseDirectory
+                )
+            }
         }
         isTransforming = false
     }

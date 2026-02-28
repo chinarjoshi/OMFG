@@ -185,6 +185,7 @@ final class EditorViewController: UIViewController {
     // Elastic pull navigation
     private let overscrollThreshold: CGFloat = 25
     private var isOverscrolling = false
+    private var isKeyboardVisible = false
 
     // Table auto-formatting
     private var previousTableRange: NSRange?
@@ -341,9 +342,16 @@ final class EditorViewController: UIViewController {
             name: UIResponder.keyboardWillHideNotification,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(keyboardDidHide),
+            name: UIResponder.keyboardDidHideNotification,
+            object: nil
+        )
     }
 
     @objc private func keyboardWillShow(_ notification: Notification) {
+        isKeyboardVisible = true
         guard let keyboardFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
         let keyboardHeight = keyboardFrame.height - view.safeAreaInsets.bottom
         textView.contentInset.bottom = keyboardHeight
@@ -353,6 +361,10 @@ final class EditorViewController: UIViewController {
     @objc private func keyboardWillHide(_ notification: Notification) {
         textView.contentInset.bottom = 0
         textView.verticalScrollIndicatorInsets.bottom = 0
+    }
+
+    @objc private func keyboardDidHide(_ notification: Notification) {
+        isKeyboardVisible = false
     }
 
     // MARK: - Swipe Navigation
@@ -843,6 +855,7 @@ extension EditorViewController: UITextViewDelegate {
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
         guard isOverscrolling else { return }
         isOverscrolling = false
+        guard !isKeyboardVisible else { return }
 
         let offsetY = scrollView.contentOffset.y
         let maxOffset = max(0, scrollView.contentSize.height - scrollView.bounds.height)

@@ -2,13 +2,33 @@ import UIKit
 
 // MARK: - Search Result
 
-struct SearchResult {
+struct SearchResult: Codable {
     let text: String
     let date: String
     let filePath: String
     let lineNumber: Int?
     let isWorkout: Bool
     let rawInsertText: String?
+}
+
+enum SearchRecents {
+    private static let key = "searchRecents"
+    private static let maxRecents = 20
+
+    static func load() -> [SearchResult] {
+        guard let data = UserDefaults.standard.data(forKey: key) else { return [] }
+        return (try? JSONDecoder().decode([SearchResult].self, from: data)) ?? []
+    }
+
+    static func add(_ result: SearchResult) {
+        var recents = load()
+        recents.removeAll { $0.text == result.text && $0.filePath == result.filePath }
+        recents.insert(result, at: 0)
+        if recents.count > maxRecents { recents = Array(recents.prefix(maxRecents)) }
+        if let data = try? JSONEncoder().encode(recents) {
+            UserDefaults.standard.set(data, forKey: key)
+        }
+    }
 }
 
 // MARK: - Search Result Cell
@@ -156,10 +176,6 @@ final class SearchViewController: UIViewController {
             self, selector: #selector(keyboardWillChange(_:)),
             name: UIResponder.keyboardWillChangeFrameNotification, object: nil
         )
-        NotificationCenter.default.addObserver(
-            self, selector: #selector(keyboardDidHide),
-            name: UIResponder.keyboardDidHideNotification, object: nil
-        )
     }
 
     private func configureTableView() {
@@ -197,23 +213,11 @@ final class SearchViewController: UIViewController {
         UIView.animate(withDuration: 0.25) { self.view.layoutIfNeeded() }
     }
 
-    @objc private func keyboardDidHide() {
-        onComplete()
-    }
 
     // MARK: - Search Logic
 
     private func loadRecent() {
-        results = WorkoutIndexManager.shared.recent().map { entry in
-            SearchResult(
-                text: entry.rawLine,
-                date: entry.date,
-                filePath: entry.filePath,
-                lineNumber: nil,
-                isWorkout: true,
-                rawInsertText: entry.rawLine
-            )
-        }
+        results = SearchRecents.load()
         tableView.reloadData()
     }
 
@@ -242,7 +246,7 @@ final class SearchViewController: UIViewController {
             let key = "\(entry.filePath):\(entry.date):\(entry.name.lowercased())"
             workoutKeys.insert(key)
             combined.append(SearchResult(
-                text: entry.rawLine,
+                text: entry.displayText,
                 date: entry.date,
                 filePath: entry.filePath,
                 lineNumber: nil,
@@ -334,6 +338,7 @@ extension SearchViewController: UITableViewDataSource, UITableViewDelegate {
         cell.configure(with: result)
         cell.onInsert = { [weak self] in
             guard let raw = result.rawInsertText else { return }
+            SearchRecents.add(result)
             self?.searchBar.resignFirstResponder()
             self?.onInsert(raw)
         }
@@ -343,6 +348,7 @@ extension SearchViewController: UITableViewDataSource, UITableViewDelegate {
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
         let result = results[indexPath.row]
+        SearchRecents.add(result)
         searchBar.resignFirstResponder()
         onNavigate(result.filePath, result.lineNumber)
     }
